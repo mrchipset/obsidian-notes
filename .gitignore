@@ -1,0 +1,11 @@
+# Local secrets / machine-specific config
+.env
+
+# ignis runtime data
+data/
+
+# Obsidian MCP runtime journal / trash
+vaults/*/.obsidian-mcp/
+
+# Obsidian local UI state
+vaults/*/.obsidian/workspace.json

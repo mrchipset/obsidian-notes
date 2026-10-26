@@ -1,0 +1,83 @@
+# Portable deployment: ignis (Obsidian Web) + obsidian-mcp (Streamable HTTP)
+#
+# Quick start:
+#   cp .env.example .env    # then edit .env
+#   docker compose up -d
+#
+# All paths are relative to this compose file. See README.md for details.
+
+services:
+  ignis:
+    image: ${IGNIS_IMAGE:-nobbe/ignis@sha256:8faba2774dd9069360aedbf9ace87cdf926c454ccee56a2d7bc5ff7556737567}
+    container_name: ${IGNIS_CONTAINER_NAME:-ignis}
+    ports:
+      - "${IGNIS_BIND:-127.0.0.1}:${IGNIS_PORT:-8080}:8080"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - http_proxy=${HTTP_PROXY:-}
+      - https_proxy=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
+      - no_proxy=${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "${VAULT_ROOT:-./vaults}:/vaults"
+      - "${DATA_DIR:-./data}:/app/data"
+      - obsidian-app:/app/obsidian-app
+      # Docker Desktop 跨容器 inotify 不可靠；轮询版 watcher 保证 MCP 写入实时可见
+      - "${WATCHER_PATCH:-./patches/server-core-watcher.js}:/app/packages/server-core/src/watcher.js:ro"
+    restart: unless-stopped
+
+  # One-shot init: named volumes are created as root, but the MCP runs as PUID.
+  # Without this, /home/node/.npm is not writable and npx fails.
+  npm-cache-init:
+    image: ${NODE_IMAGE:-node:22.23.4-bookworm-slim}
+    user: "0:0"
+    volumes:
+      - npm-cache:/cache
+    command: ["sh", "-c", "chown -R ${PUID:-1000}:${PGID:-1000} /cache"]
+    restart: "no"
+
+  obsidian-mcp:
+    image: ${NODE_IMAGE:-node:22.23.4-bookworm-slim}
+    container_name: ${MCP_CONTAINER_NAME:-obsidian-mcp}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    depends_on:
+      npm-cache-init:
+        condition: service_completed_successfully
+    command: >
+      npx -y supergateway@${SUPERGATEWAY_VERSION:-4.2.1}
+      --stdio "npx -y obsidian-mcp@${OBSIDIAN_MCP_VERSION:-2.0.1} serve --vault ${VAULT_ID:-notes}=/data"
+      --outputTransport streamableHttp
+      --port 8811
+      --host 0.0.0.0
+      --healthEndpoint /healthz
+    ports:
+      - "${MCP_BIND:-127.0.0.1}:${MCP_PORT:-8811}:8811"
+    volumes:
+      - "${VAULT_DIR:-./vaults/test}:/data"
+      - npm-cache:/home/node/.npm
+    environment:
+      - HOME=/home/node
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - http_proxy=${HTTP_PROXY:-}
+      - https_proxy=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
+      - no_proxy=${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8811/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+
+volumes:
+  obsidian-app:
+  npm-cache:
