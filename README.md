@@ -1,43 +1,45 @@
-# Obsidian + MCP 部署
+# Obsidian + MCP Deployment
 
-用 Docker Compose 部署一套「浏览器版 Obsidian + Obsidian MCP」：
+**English** | [简体中文](README.zh-CN.md)
 
-- `ignis`：浏览器访问的 Obsidian Web，默认 `http://127.0.0.1:8080`
-- `obsidian-mcp`：把 stdio 型 obsidian-mcp 包成 Streamable HTTP，默认 `http://127.0.0.1:8811/mcp`
-- 两者共用同一个 vault 目录
+Deploy a browser-based Obsidian instance and an Obsidian MCP server with Docker Compose:
 
-鉴权、公网暴露和 IP 网段限制的完整设计见 [AUTHENTICATION.md](./AUTHENTICATION.md)。
+- `ignis`: the Obsidian Web UI at `http://127.0.0.1:8080`
+- `obsidian-mcp`: wraps the stdio `obsidian-mcp` server as Streamable HTTP at `http://127.0.0.1:8811/mcp`
+- Both share the same vault directory
 
-## 前置条件
+For the complete authentication, public-exposure, and IP-range restriction design, see [AUTHENTICATION.md](./AUTHENTICATION.md) (currently in Chinese).
 
-- Docker Engine / Docker Desktop + Compose v2.17 以上
-- 一个真实 vault：目录里必须有 `.obsidian/`
-- 首次启动能访问 npm registry 和 GitHub（需要下载 Obsidian 与 npm 包）
-- 如果目标机器需要代理，在 `.env` 里配置 `HTTP_PROXY` / `HTTPS_PROXY`
+## Prerequisites
 
-## 快速开始
+- Docker Engine / Docker Desktop with Compose v2.17 or later
+- A real vault: the directory must contain `.obsidian/`
+- Network access to the npm registry and GitHub on first start (to download Obsidian and npm packages)
+- If the target machine needs a proxy, set `HTTP_PROXY` / `HTTPS_PROXY` in `.env`
+
+## Quick Start
 
 ```bash
-# 1. 生成配置
+# 1. Generate the config
 cp .env.example .env
 
-# 2. 准备 vault（示例；也可以复制已有 vault）
+# 2. Prepare a vault (example; you can also copy an existing vault)
 mkdir -p vaults/test/.obsidian
 
-# 3. 编辑 .env：确认 PUID/PGID、端口、vault 路径、代理
-#    并设置 MCP_API_KEY（openssl rand -hex 32）
-#    Windows/macOS Docker Desktop 一般保持 1000 即可
+# 3. Edit .env: confirm PUID/PGID, ports, vault path, and proxy settings
+#    Set MCP_API_KEY (openssl rand -hex 32)
+#    On Windows/macOS Docker Desktop, 1000 is usually fine
 
-# 4. 启动
+# 4. Start
 docker compose up -d
 
-# 5. 检查
+# 5. Check
 docker compose ps
 curl http://127.0.0.1:8811/healthz
 curl http://127.0.0.1:8080/api/vault/list
 ```
 
-MCP 客户端配置：
+MCP client configuration:
 
 ```json
 {
@@ -55,10 +57,10 @@ MCP 客户端配置：
 }
 ```
 
-opencode 不会自动读取项目目录下的 `.env`，启动前需要在当前 shell 里设置 `MCP_API_KEY`（值取自 `.env` 中的同名变量）：
+opencode does not automatically load `.env` from the project directory. Set `MCP_API_KEY` in the current shell before starting opencode (use the value from the same variable in `.env`):
 
 ```powershell
-# PowerShell：启动 opencode 前执行
+# PowerShell: run before starting opencode
 $env:MCP_API_KEY = (Get-Content .env | Where-Object { $_ -match '^MCP_API_KEY=' }) -replace '^MCP_API_KEY=',''
 opencode
 ```
@@ -69,109 +71,113 @@ export MCP_API_KEY="$(grep '^MCP_API_KEY=' .env | cut -d= -f2-)"
 opencode
 ```
 
-## MCP 鉴权
+## MCP Authentication
 
-supergateway 4.2.1 原生支持静态 API Key。compose 已通过 `--apiKey` 启用，所有 MCP 请求必须携带以下任一种头：
+supergateway 4.2.1 natively supports a static API key. Compose enables it through `--apiKey`, so every MCP request must carry one of these headers:
 
 - `X-API-Key: <MCP_API_KEY>`
 - `Authorization: Bearer <MCP_API_KEY>`
 
-`/healthz` 健康检查不受 API Key 保护，只用于容器内部检查，不要暴露到公网。
+The `/healthz` endpoint is not protected by the API key. It is intended for container-internal checks and must not be exposed publicly.
 
-`MCP_API_KEY` 只放在 `.env`（已被 `.gitignore` 忽略），不要提交到仓库。轮换时修改 `.env` 后重启 `obsidian-mcp`；supergateway 也支持同时配置多个 key，可先加新 key 再删旧 key。
+`MCP_API_KEY` lives only in `.env` (ignored by `.gitignore`); do not commit it. To rotate the key, update `.env` and restart `obsidian-mcp`. supergateway also accepts multiple keys at once, so you can add a new key before removing the old one.
 
-验证：
+Verify:
 
 ```bash
-# 无 key：应为 401
+# No key: should return 401
 curl -i http://127.0.0.1:8811/mcp
 
-# 带 key：不应再是 401
+# With key: should no longer return 401
 curl -i -H "X-API-Key: $MCP_API_KEY" http://127.0.0.1:8811/mcp
 ```
 
-## .env 变量
+## .env Variables
 
-| 变量 | 默认 | 说明 |
+| Variable | Default | Description |
 |---|---|---|
-| `PUID` / `PGID` | 1000 | vault 属主；ignis 与 MCP 必须一致 |
-| `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8080 | Web UI 绑定地址与端口 |
-| `MCP_BIND` / `MCP_PORT` | 127.0.0.1 / 8811 | MCP 绑定地址与端口 |
-| `VAULT_ROOT` | ./vaults | ignis 挂载的 vault 根目录 |
-| `VAULT_DIR` | ./vaults/test | MCP 挂载的单个 vault，必须位于 `VAULT_ROOT` 内 |
-| `VAULT_ID` | notes | MCP 工具里的 `vault` 参数 |
-| `MCP_API_KEY` | 无（必须设置） | supergateway 静态 API Key；`X-API-Key` 或 `Authorization: Bearer` |
-| `DATA_DIR` | ./data | ignis 应用数据 |
-| `WATCHER_PATCH` | ./patches/server-core-watcher.js | 轮询 watcher 补丁 |
-| `HTTP_PROXY` / `HTTPS_PROXY` | 空 | 不需要代理就留空 |
-| `NO_PROXY` | localhost,... | 本地地址不走代理 |
+| `PUID` / `PGID` | 1000 | Vault owner; must match between ignis and MCP |
+| `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8080 | Web UI bind address and port |
+| `MCP_BIND` / `MCP_PORT` | 127.0.0.1 / 8811 | MCP bind address and port |
+| `VAULT_ROOT` | ./vaults | Vault root mounted into ignis |
+| `VAULT_DIR` | ./vaults/test | Single vault mounted into MCP; must be inside `VAULT_ROOT` |
+| `VAULT_ID` | notes | `vault` parameter used by MCP tools |
+| `MCP_API_KEY` | none (required) | supergateway static API key; `X-API-Key` or `Authorization: Bearer` |
+| `DATA_DIR` | ./data | ignis application data |
+| `WATCHER_PATCH` | ./patches/server-core-watcher.js | Polling watcher patch |
+| `HTTP_PROXY` / `HTTPS_PROXY` | empty | Leave empty if no proxy is needed |
+| `NO_PROXY` | localhost,... | Addresses that bypass the proxy |
 
-所有路径都相对于 `docker-compose.yml` 所在目录。
+All paths are relative to the directory containing `docker-compose.yml`.
 
-## 版本固定
+## Pinned Versions
 
-| 组件 | 固定值 |
+| Component | Pinned value |
 |---|---|
-| ignis | `nobbe/ignis@sha256:8faba277...`（Obsidian 1.14.4） |
+| ignis | `nobbe/ignis@sha256:8faba277...` (Obsidian 1.14.4) |
 | Node | `node:22.23.4-bookworm-slim` |
 | supergateway | `4.2.1` |
 | obsidian-mcp | `2.0.1` |
 
-obsidian-mcp 源码：[StevenStavrakis/obsidian-mcp](https://github.com/StevenStavrakis/obsidian-mcp/tree/v2.0.1)（MIT）。
+obsidian-mcp source: [StevenStavrakis/obsidian-mcp](https://github.com/StevenStavrakis/obsidian-mcp/tree/v2.0.1) (MIT).
 
-升级 ignis 时需要同步检查 `patches/server-core-watcher.js`：它是从镜像内 `watcher.js` 复制的，只多了 `usePolling` 三行。
+When upgrading ignis, also check `patches/server-core-watcher.js`: it is copied from the image's `watcher.js` and adds only the three `usePolling` lines.
 
-## 常见坑
+## Common Pitfalls
 
-1. **Linux 上 UID 不一致**
-   - 把 `PUID/PGID` 设成 vault 目录的属主：`stat -c '%u:%g' vaults`。
-   - 然后 `sudo chown -R $PUID:$PGID vaults data`。
-   - 症状：ignis 报 `EACCES`，MCP 写的笔记在 Web 里完全不出现。
+1. **UID mismatch on Linux**
+   - Set `PUID/PGID` to the owner of the vault directory: `stat -c '%u:%g' vaults`.
+   - Then run `sudo chown -R $PUID:$PGID vaults data`.
+   - Symptom: ignis reports `EACCES`, and notes written by MCP do not appear in the web UI at all.
 
-2. **全新的 npm-cache 卷不可写**
-   - 命名卷默认是 root 属主，而 MCP 以 `PUID` 运行。
-   - compose 已用 `npm-cache-init` 一次性 chown；如果你删掉了这个服务，就要自己处理。
+2. **A fresh npm-cache volume is not writable**
+   - Named volumes are owned by root by default, while MCP runs as `PUID`.
+   - Compose uses `npm-cache-init` to chown it once; if you remove that service, you must handle it yourself.
 
-3. **代理写死**
-   - 其他机器没有 `host.docker.internal:10808` 时，npx 和 Obsidian 下载会卡住。
-   - 换机器时从 `.env.example` 重新生成 `.env`，不要直接复制本机的 `.env`。
+3. **Hard-coded proxy**
+   - On another machine without `host.docker.internal:10808`, npx and Obsidian downloads can stall.
+   - Regenerate `.env` from `.env.example` when moving machines; do not copy the local `.env`.
 
-4. **端口/容器名冲突**
-   - 同机多套部署时修改 `IGNIS_PORT`、`MCP_PORT`、`IGNIS_CONTAINER_NAME`、`MCP_CONTAINER_NAME`。
+4. **Port or container name conflicts**
+   - When running multiple deployments on one host, change `IGNIS_PORT`, `MCP_PORT`, `IGNIS_CONTAINER_NAME`, and `MCP_CONTAINER_NAME`.
 
-5. **首次启动慢**
-   - 需要下载 Obsidian 与 npm 包；entrypoint 还会尝试安装 `obsidian-headless`。
-   - 网络不好时可能停在 `[ignis] Installing obsidian-headless...`，此时 Web 服务还没起来。
-   - 可以先中止这个可选安装，让服务起来：
+5. **Slow first start**
+   - Obsidian and npm packages must be downloaded; the entrypoint also tries to install `obsidian-headless`.
+   - On a slow network it may stop at `[ignis] Installing obsidian-headless...`, and the web service is not up yet.
+   - You can stop this optional install first to bring the service up:
      ```bash
      docker exec -u 0 ignis sh -c 'pkill -f "npm install obsidian-headless"'
      ```
-   - 代价是 headless sync 不可用；之后可单独执行 `docker exec -u 0 ignis npm install -g --prefix /usr/local obsidian-headless` 补装。
+   - The trade-off is that headless sync is unavailable; you can install it later with `docker exec -u 0 ignis npm install -g --prefix /usr/local obsidian-headless`.
 
-6. **缺 `patches/server-core-watcher.js`**
-   - Docker 会把缺失的 bind 源建成目录，导致挂载到文件路径失败。
-   - 整个项目目录一起复制，或把 `WATCHER_PATCH` 指向一个真实文件。
+6. **Missing `patches/server-core-watcher.js`**
+   - Docker creates a missing bind source as a directory, which makes mounting to a file path fail.
+   - Copy the whole project directory, or point `WATCHER_PATCH` at a real file.
 
-## 目录结构
+## Directory Layout
 
 ```text
 .
 ├── docker-compose.yml
 ├── .env.example
-├── .env                 # 本地生成，不提交
+├── .env                 # local only, not committed
 ├── patches/
 │   └── server-core-watcher.js
 ├── vaults/
 │   └── test/
 │       ├── .obsidian/
 │       └── *.md
-└── data/                # ignis 运行时数据
+└── data/                # ignis runtime data
 ```
 
-## 安全
+## Security
 
-- `ignis` 和 MCP 默认都只绑 `127.0.0.1`。
-- MCP 现在要求 `MCP_API_KEY`，但它是静态共享密钥，没有用户身份、scope 或审计。
-- `ignis` 本身没有任何内置登录/鉴权；不要直接把它的端口暴露到公网。
-- 如果设置 `MCP_BIND=0.0.0.0`，请放到 TLS 反代 / SSH 隧道 / Tailscale 后面，并建议用 supergateway `--tools` 限制可调用的工具。
-- 不要把 `.env` 提交到仓库（`.gitignore` 已忽略）。
+- `ignis` and MCP bind to `127.0.0.1` by default.
+- MCP now requires `MCP_API_KEY`, but it is a static shared secret with no user identity, scopes, or audit.
+- `ignis` has no built-in login or authentication; do not expose its port directly to the public internet.
+- If you set `MCP_BIND=0.0.0.0`, put it behind a TLS reverse proxy, SSH tunnel, or Tailscale, and consider using supergateway `--tools` to limit the exposed tools.
+- Do not commit `.env` to the repository (`.gitignore` already ignores it).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
