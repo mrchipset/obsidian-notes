@@ -6,6 +6,8 @@
 - `obsidian-mcp`：把 stdio 型 obsidian-mcp 包成 Streamable HTTP，默认 `http://127.0.0.1:8811/mcp`
 - 两者共用同一个 vault 目录
 
+鉴权、公网暴露和 IP 网段限制的完整设计见 [AUTHENTICATION.md](./AUTHENTICATION.md)。
+
 ## 前置条件
 
 - Docker Engine / Docker Desktop + Compose v2.17 以上
@@ -22,7 +24,8 @@ cp .env.example .env
 # 2. 准备 vault（示例；也可以复制已有 vault）
 mkdir -p vaults/test/.obsidian
 
-# 3. 编辑 .env：至少确认 PUID/PGID、端口、vault 路径、代理
+# 3. 编辑 .env：确认 PUID/PGID、端口、vault 路径、代理
+#    并设置 MCP_API_KEY（openssl rand -hex 32）
 #    Windows/macOS Docker Desktop 一般保持 1000 即可
 
 # 4. 启动
@@ -42,10 +45,49 @@ MCP 客户端配置：
     "obsidian": {
       "type": "remote",
       "url": "http://127.0.0.1:8811/mcp",
-      "enabled": true
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "X-API-Key": "{env:MCP_API_KEY}"
+      }
     }
   }
 }
+```
+
+opencode 不会自动读取项目目录下的 `.env`，启动前需要在当前 shell 里设置 `MCP_API_KEY`（值取自 `.env` 中的同名变量）：
+
+```powershell
+# PowerShell：启动 opencode 前执行
+$env:MCP_API_KEY = (Get-Content .env | Where-Object { $_ -match '^MCP_API_KEY=' }) -replace '^MCP_API_KEY=',''
+opencode
+```
+
+```bash
+# bash/zsh
+export MCP_API_KEY="$(grep '^MCP_API_KEY=' .env | cut -d= -f2-)"
+opencode
+```
+
+## MCP 鉴权
+
+supergateway 4.2.1 原生支持静态 API Key。compose 已通过 `--apiKey` 启用，所有 MCP 请求必须携带以下任一种头：
+
+- `X-API-Key: <MCP_API_KEY>`
+- `Authorization: Bearer <MCP_API_KEY>`
+
+`/healthz` 健康检查不受 API Key 保护，只用于容器内部检查，不要暴露到公网。
+
+`MCP_API_KEY` 只放在 `.env`（已被 `.gitignore` 忽略），不要提交到仓库。轮换时修改 `.env` 后重启 `obsidian-mcp`；supergateway 也支持同时配置多个 key，可先加新 key 再删旧 key。
+
+验证：
+
+```bash
+# 无 key：应为 401
+curl -i http://127.0.0.1:8811/mcp
+
+# 带 key：不应再是 401
+curl -i -H "X-API-Key: $MCP_API_KEY" http://127.0.0.1:8811/mcp
 ```
 
 ## .env 变量
@@ -58,6 +100,7 @@ MCP 客户端配置：
 | `VAULT_ROOT` | ./vaults | ignis 挂载的 vault 根目录 |
 | `VAULT_DIR` | ./vaults/test | MCP 挂载的单个 vault，必须位于 `VAULT_ROOT` 内 |
 | `VAULT_ID` | notes | MCP 工具里的 `vault` 参数 |
+| `MCP_API_KEY` | 无（必须设置） | supergateway 静态 API Key；`X-API-Key` 或 `Authorization: Bearer` |
 | `DATA_DIR` | ./data | ignis 应用数据 |
 | `WATCHER_PATCH` | ./patches/server-core-watcher.js | 轮询 watcher 补丁 |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 空 | 不需要代理就留空 |
@@ -128,5 +171,7 @@ obsidian-mcp 源码：[StevenStavrakis/obsidian-mcp](https://github.com/StevenSt
 ## 安全
 
 - `ignis` 和 MCP 默认都只绑 `127.0.0.1`。
-- MCP 没有鉴权；如果设置 `MCP_BIND=0.0.0.0`，请放到反代 / SSH 隧道 / 防火墙后面。
+- MCP 现在要求 `MCP_API_KEY`，但它是静态共享密钥，没有用户身份、scope 或审计。
+- `ignis` 本身没有任何内置登录/鉴权；不要直接把它的端口暴露到公网。
+- 如果设置 `MCP_BIND=0.0.0.0`，请放到 TLS 反代 / SSH 隧道 / Tailscale 后面，并建议用 supergateway `--tools` 限制可调用的工具。
 - 不要把 `.env` 提交到仓库（`.gitignore` 已忽略）。

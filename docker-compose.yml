@@ -48,12 +48,14 @@ services:
     depends_on:
       npm-cache-init:
         condition: service_completed_successfully
+    # Require MCP_API_KEY for every MCP request (health endpoint excluded).
     command: >
       npx -y supergateway@${SUPERGATEWAY_VERSION:-4.2.1}
       --stdio "npx -y obsidian-mcp@${OBSIDIAN_MCP_VERSION:-2.0.1} serve --vault ${VAULT_ID:-notes}=/data"
       --outputTransport streamableHttp
       --port 8811
       --host 0.0.0.0
+      --apiKey "${MCP_API_KEY:?MCP_API_KEY must be set in .env}"
       --healthEndpoint /healthz
     ports:
       - "${MCP_BIND:-127.0.0.1}:${MCP_PORT:-8811}:8811"
