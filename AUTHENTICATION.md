@@ -42,7 +42,7 @@
       ▼                ▼
 ┌───────────┐    ┌──────────────────────────┐
 │ ignis     │    │ supergateway :8811       │
-│ :8080     │    │ - MCP_API_KEY            │
+│ :8880     │    │ - MCP_API_KEY            │
 │ 无内置认证 │    │ - --tools 工具白名单      │
 └───────────┘    └────────────┬─────────────┘
                               │ stdio
@@ -59,7 +59,7 @@
 
 | 组件 | 默认监听 | 是否有鉴权 | 职责 |
 |---|---|---|---|
-| `ignis` | `127.0.0.1:8080` | 无 | 浏览器版 Obsidian Web UI，直接读写 vault |
+| `ignis` | `127.0.0.1:8880` | 无 | 浏览器版 Obsidian Web UI，直接读写 vault |
 | `supergateway` | `127.0.0.1:8811` | 静态 API Key | 把 stdio MCP 包成 Streamable HTTP |
 | `obsidian-mcp` | 容器内 stdio | 无网络监听 | 实际的 vault 读写工具 |
 | MCP 客户端（opencode） | 本机 | 携带 API Key | 调用 MCP 工具 |
@@ -516,13 +516,13 @@ tailscale serve --bg 8811
 
 ### 5.3 推荐架构：宿主机 Caddy + 防火墙
 
-保持 ignis 只绑 `127.0.0.1:8080`：
+保持 ignis 只绑 `127.0.0.1:8880`：
 
 ```yaml
 services:
   ignis:
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8880:8080"
     environment:
       - WS_ORIGINS=https://ignis.example.com
       # 不要设置 PROXY_ALLOW_PRIVATE_HOSTS，除非插件确实需要
@@ -539,7 +539,7 @@ ignis.example.com {
         user <bcrypt-hash>
     }
 
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8880
 }
 ```
 
@@ -567,7 +567,7 @@ server {
         auth_basic "Ignis";
         auth_basic_user_file /etc/nginx/.htpasswd;
 
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8880;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;

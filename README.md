@@ -4,7 +4,7 @@
 
 Deploy a browser-based Obsidian instance and an Obsidian MCP server with Docker Compose:
 
-- `ignis`: the Obsidian Web UI at `http://127.0.0.1:8080`
+- `ignis`: the Obsidian Web UI at `http://127.0.0.1:8880`
 - `obsidian-mcp`: wraps the stdio `obsidian-mcp` server as Streamable HTTP at `http://127.0.0.1:8811/mcp`
 - Both share the same vault directory
 
@@ -36,7 +36,7 @@ docker compose up -d
 # 5. Check
 docker compose ps
 curl http://127.0.0.1:8811/healthz
-curl http://127.0.0.1:8080/api/vault/list
+curl http://127.0.0.1:8880/api/vault/list
 ```
 
 MCP client configuration:
@@ -97,7 +97,7 @@ curl -i -H "X-API-Key: $MCP_API_KEY" http://127.0.0.1:8811/mcp
 | Variable | Default | Description |
 |---|---|---|
 | `PUID` / `PGID` | 1000 | Vault owner; must match between ignis and MCP |
-| `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8080 | Web UI bind address and port |
+| `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8880 | Web UI bind address and port |
 | `MCP_BIND` / `MCP_PORT` | 127.0.0.1 / 8811 | MCP bind address and port |
 | `VAULT_ROOT` | ./vaults | Vault root mounted into ignis |
 | `VAULT_DIR` | ./vaults/test | Single vault mounted into MCP; must be inside `VAULT_ROOT` |

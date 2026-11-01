@@ -4,7 +4,7 @@
 
 用 Docker Compose 部署一套「浏览器版 Obsidian + Obsidian MCP」：
 
-- `ignis`：浏览器访问的 Obsidian Web，默认 `http://127.0.0.1:8080`
+- `ignis`：浏览器访问的 Obsidian Web，默认 `http://127.0.0.1:8880`
 - `obsidian-mcp`：把 stdio 型 obsidian-mcp 包成 Streamable HTTP，默认 `http://127.0.0.1:8811/mcp`
 - 两者共用同一个 vault 目录
 
@@ -36,7 +36,7 @@ docker compose up -d
 # 5. 检查
 docker compose ps
 curl http://127.0.0.1:8811/healthz
-curl http://127.0.0.1:8080/api/vault/list
+curl http://127.0.0.1:8880/api/vault/list
 ```
 
 MCP 客户端配置：
@@ -97,7 +97,7 @@ curl -i -H "X-API-Key: $MCP_API_KEY" http://127.0.0.1:8811/mcp
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `PUID` / `PGID` | 1000 | vault 属主；ignis 与 MCP 必须一致 |
-| `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8080 | Web UI 绑定地址与端口 |
+| `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8880 | Web UI 绑定地址与端口 |
 | `MCP_BIND` / `MCP_PORT` | 127.0.0.1 / 8811 | MCP 绑定地址与端口 |
 | `VAULT_ROOT` | ./vaults | ignis 挂载的 vault 根目录 |
 | `VAULT_DIR` | ./vaults/test | MCP 挂载的单个 vault，必须位于 `VAULT_ROOT` 内 |

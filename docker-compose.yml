@@ -11,7 +11,7 @@ services:
     image: ${IGNIS_IMAGE:-nobbe/ignis@sha256:8faba2774dd9069360aedbf9ace87cdf926c454ccee56a2d7bc5ff7556737567}
     container_name: ${IGNIS_CONTAINER_NAME:-ignis}
     ports:
-      - "${IGNIS_BIND:-127.0.0.1}:${IGNIS_PORT:-8080}:8080"
+      - "${IGNIS_BIND:-127.0.0.1}:${IGNIS_PORT:-8880}:8080"
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
