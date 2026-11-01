@@ -1,5 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": ["./skill"]
+  },
   "mcp": {
     "obsidian": {
       "type": "remote",
