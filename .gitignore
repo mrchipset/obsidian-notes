@@ -9,3 +9,4 @@ vaults/*/.obsidian-mcp/
 
 # Obsidian local UI state
 vaults/*/.obsidian/workspace.json
+vaults
