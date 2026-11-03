@@ -10,7 +10,7 @@
       "enabled": true,
       "oauth": false,
       "headers": {
-        "X-API-Key": "{env:MCP_API_KEY}"
+        "Authorization": "Bearer {env:MCP_API_KEY}"
       }
     }
   }

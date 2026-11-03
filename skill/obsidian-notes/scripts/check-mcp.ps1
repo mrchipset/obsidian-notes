@@ -47,7 +47,7 @@ $body = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersio
 try {
     [IO.File]::WriteAllText($bodyFile, $body, (New-Object System.Text.UTF8Encoding($false)))
 
-    $health = & curl.exe -s -o NUL -w "%{http_code}" --max-time $TimeoutSeconds "$base/healthz"
+    $live = & curl.exe -s -o NUL -w "%{http_code}" --max-time $TimeoutSeconds "$base/mcp"
     $noKey = & curl.exe -s -o NUL -w "%{http_code}" --max-time $TimeoutSeconds `
         -X POST `
         -H "Content-Type: application/json" `
@@ -59,23 +59,23 @@ try {
         -X POST `
         -H "Content-Type: application/json" `
         -H "Accept: application/json, text/event-stream" `
-        -H "X-API-Key: $key" `
+        -H "Authorization: Bearer $key" `
         --data-binary "@$bodyFile" `
         "$base/mcp"
 
-    Write-Host "Endpoint:       $base"
-    Write-Host "GET /healthz:   $health"
+    Write-Host "Endpoint:         $base"
+    Write-Host "GET /mcp:         $live"
     Write-Host "POST /mcp (none): $noKey"
     Write-Host "POST /mcp (key):  $withKey"
 
-    $ok = ($health -eq "200" -and $noKey -eq "401" -and $withKey -eq "200")
+    $ok = ($live -eq "401" -and $noKey -eq "401" -and $withKey -eq "200")
 
     if ($ok) {
-        Write-Host "OK: MCP is healthy and the API key is accepted." -ForegroundColor Green
+        Write-Host "OK: MCP is listening and the bearer token is accepted." -ForegroundColor Green
         exit 0
     }
 
-    Write-Host "FAILED: expected health=200, no-key=401, with-key=200." -ForegroundColor Red
+    Write-Host "FAILED: expected GET /mcp=401, no-key=401, with-key=200." -ForegroundColor Red
     exit 1
 }
 finally {
