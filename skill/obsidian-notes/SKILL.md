@@ -21,7 +21,7 @@ Use the `obsidian` MCP server to work with the local Obsidian vault.
 - The MCP endpoint is normally `http://127.0.0.1:8811/mcp`.
 - The vault id is normally `notes`; verify it with `obsidian_list_vaults`.
 - The Docker service must already be running. This skill does not start or stop containers.
-- If the MCP connection fails, ask the user to start the service and restart opencode.
+- If the MCP connection fails, ask the user to start the service and run `opencode reload` (or restart opencode).
 
 ## Tool names
 
@@ -80,7 +80,8 @@ The MCP server is named `obsidian`. Some clients prefix tool names with the serv
 
 | Symptom | Action |
 |---|---|
-| `401 Unauthorized` | Check `MCP_API_KEY` in the process environment; restart opencode after changing it |
+| `401 Unauthorized` | Check `MCP_API_KEY` in the process environment; run `opencode reload` after changing it |
+| `403 Forbidden` | The `Host` header was rejected; set `MCP_ALLOWED_HOST` and recreate the container |
 | Connection refused | Ask the user to start the `obsidian-mcp` Docker service |
 | `if_match` conflict | Re-read the note, get a fresh `etag`, and retry |
 | `VAULT_PERMISSION_DENIED` | The vault is not writable by the MCP container; fix ownership or mount |

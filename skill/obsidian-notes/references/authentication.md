@@ -6,31 +6,21 @@ Canonical repo document: [`../../../AUTHENTICATION.md`](../../../AUTHENTICATION.
 
 ## What protects the MCP endpoint
 
-supergateway 4.2.1 supports a static API key:
+The `obsidian-mcp-http` transport enforces a static bearer token configured with `--auth-token` or the `OBSIDIAN_MCP_HTTP_TOKEN` environment variable. Compose passes `MCP_API_KEY` through that environment variable.
 
-- `--apiKey "<key>"`
-- `--apiKeyFile /run/secrets/mcp_api_key`
-- environment variables `SUPERGATEWAY_API_KEY` / `SUPERGATEWAY_API_KEY_FILE`
-
-Every MCP request must send one of:
-
-```http
-X-API-Key: <MCP_API_KEY>
-```
-
-or:
+Every MCP request must send:
 
 ```http
 Authorization: Bearer <MCP_API_KEY>
 ```
 
-The `X-API-Key` form is preferred for this deployment because it avoids conflicts with edge authentication headers.
+`X-API-Key` is **not** supported. Requests without the token receive `401`.
 
 ## Required environment variable
 
 The MCP server and the client both need `MCP_API_KEY`.
 
-- Docker Compose reads it from `.env`.
+- Docker Compose reads it from `.env` and refuses to start when it is empty.
 - opencode reads it from the **process environment**; it does not load `.env` automatically.
 
 Set it before starting opencode:
@@ -58,30 +48,26 @@ opencode
       "enabled": true,
       "oauth": false,
       "headers": {
-        "X-API-Key": "{env:MCP_API_KEY}"
+        "Authorization": "Bearer {env:MCP_API_KEY}"
       }
     }
   }
 }
 ```
 
-`"oauth": false` tells opencode this is a static key, not an OAuth server.
+`"oauth": false` tells opencode this is a static token, not an OAuth server. Run `opencode reload` after editing the config.
 
 ## Health and verification
 
-The health endpoint is **not** protected by the API key:
-
-```bash
-curl http://127.0.0.1:8811/healthz
-```
+There is no unauthenticated `/healthz` endpoint. With a token configured, `GET /mcp` itself returns `401`, which still proves the service is listening.
 
 Expected:
 
 | Request | Status |
 |---|---|
-| `GET /healthz` | `200` |
-| `POST /mcp` without key | `401` |
-| `POST /mcp` with key | `200` |
+| `GET /mcp` without token | `401` |
+| `POST /mcp` without token | `401` |
+| `POST /mcp` with `Authorization: Bearer` | `200` |
 
 Run the skill's check script:
 
@@ -105,16 +91,15 @@ Do not expose port `8811` directly to the public internet. If remote access is r
 
 Cloudflare Access cannot enforce a private `10.8.x.x` CIDR because Cloudflare sees the public egress IP. Enforce private VPN ranges at the VPN or host firewall.
 
+When clients reach the container through a LAN address or hostname, set `MCP_ALLOWED_HOST` to that value; the transport validates the `Host` header.
+
 ## Key rotation
 
-supergateway accepts multiple keys at once:
+The server supports one token at a time. To rotate:
 
-```bash
---apiKey "$OLD_MCP_API_KEY" \
---apiKey "$NEW_MCP_API_KEY"
-```
-
-Rotate by adding the new key, restarting the MCP service, updating clients, then removing the old key.
+1. Update `MCP_API_KEY` in `.env` and the client environment.
+2. Recreate the container: `docker compose up -d obsidian-mcp`.
+3. Reload the client: `opencode reload`.
 
 ## Related docs
 

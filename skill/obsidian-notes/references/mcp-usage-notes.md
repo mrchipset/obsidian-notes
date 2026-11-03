@@ -1,6 +1,6 @@
 # Obsidian MCP Usage Reference
 
-This reference summarizes the `obsidian-mcp` 2.0.1 toolset exposed through supergateway 4.2.1.
+This reference summarizes the `obsidian-mcp-http` 2.1.0 toolset. The server is built from the local fork and exposes Streamable HTTP natively; supergateway is no longer used.
 
 Canonical repo document: [`../../../docs/mcp-usage-notes.md`](../../../docs/mcp-usage-notes.md)
 
@@ -8,12 +8,12 @@ Canonical repo document: [`../../../docs/mcp-usage-notes.md`](../../../docs/mcp-
 
 ```text
 MCP client (opencode)
-        │ Streamable HTTP + X-API-Key
+        │ Streamable HTTP + Authorization: Bearer
         ▼
 http://127.0.0.1:8811/mcp
-        │ stdio
+        │
         ▼
-obsidian-mcp serve --vault notes=/data
+obsidian-mcp serve --vault notes=/data --transport http
         │
         ▼
 vault mounted at /data
@@ -22,7 +22,7 @@ vault mounted at /data
 - MCP server name: `obsidian`
 - Vault id: `notes`
 - Endpoint: `http://127.0.0.1:8811/mcp`
-- Health endpoint: `http://127.0.0.1:8811/healthz` (not API-key protected)
+- No `/healthz`; an unauthenticated `GET /mcp` returning `401` means the service is listening
 - Tools require a `vault` parameter. In this deployment it is `notes`.
 
 ## Tool catalog
@@ -172,7 +172,8 @@ Use relative paths with forward slashes only.
 
 | Error | Meaning | Fix |
 |---|---|---|
-| `401 Unauthorized` | Missing or wrong API key | Set `MCP_API_KEY`, restart opencode |
+| `401 Unauthorized` | Missing or wrong bearer token | Set `MCP_API_KEY`, send `Authorization: Bearer`, restart opencode |
+| `403 Forbidden` | `Host` header rejected | Set `MCP_ALLOWED_HOST` and recreate the container |
 | `if_match` conflict | Note changed since it was read | Re-read, use the new `etag` |
 | `VAULT_PERMISSION_DENIED` | Vault is not writable by the container | Fix owner/permissions |
 | Path rejected | Absolute path, backslash, or `..` | Use a relative vault path |

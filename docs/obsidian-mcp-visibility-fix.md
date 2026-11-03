@@ -1,5 +1,7 @@
 # Obsidian MCP 写入后 Web 界面不可见：修复报告
 
+> 历史记录：本文描述的是旧版 supergateway + stdio MCP 部署。MCP 现已改为 `obsidian-mcp-http` 原生 HTTP transport；文中的 `supergateway`、`npm-cache`、`X-API-Key` 等相关内容仅作排障历史参考。
+
 - 日期：2026-10-26
 - 环境：Windows + Docker Desktop，Compose 项目 `notes`
 - 涉及容器：`ignis`（浏览器版 Obsidian，:8080）、`obsidian-mcp`（Streamable HTTP，:8811）

@@ -5,7 +5,7 @@
 Deploy a browser-based Obsidian instance and an Obsidian MCP server with Docker Compose:
 
 - `ignis`: the Obsidian Web UI at `http://127.0.0.1:8880`
-- `obsidian-mcp`: wraps the stdio `obsidian-mcp` server as Streamable HTTP at `http://127.0.0.1:8811/mcp`
+- `obsidian-mcp`: built from the [`obsidian-mcp-http`](https://github.com/mrchipset/obsidian-mcp-http) fork, which serves Streamable HTTP natively at `http://127.0.0.1:8811/mcp`
 - Both share the same vault directory
 
 For the complete authentication, public-exposure, and IP-range restriction design, see [AUTHENTICATION.md](./AUTHENTICATION.md) (currently in Chinese).
@@ -13,9 +13,10 @@ For the complete authentication, public-exposure, and IP-range restriction desig
 ## Prerequisites
 
 - Docker Engine / Docker Desktop with Compose v2.17 or later
+- A local checkout of `obsidian-mcp-http` containing the `Dockerfile`; point `MCP_SOURCE_DIR` at it
 - A real vault: the directory must contain `.obsidian/`
-- Network access to the npm registry and GitHub on first start (to download Obsidian and npm packages)
-- If the target machine needs a proxy, set `HTTP_PROXY` / `HTTPS_PROXY` in `.env`
+- Network access to the npm registry on the **first build** (the image compiles the TypeScript sources). Runtime needs no downloads.
+- If the target machine needs a proxy, set `HTTP_PROXY` / `HTTPS_PROXY` in `.env`; compose passes them to the image build
 
 ## Quick Start
 
@@ -26,17 +27,18 @@ cp .env.example .env
 # 2. Prepare a vault (example; you can also copy an existing vault)
 mkdir -p vaults/test/.obsidian
 
-# 3. Edit .env: confirm PUID/PGID, ports, vault path, and proxy settings
-#    Set MCP_API_KEY (openssl rand -hex 32)
-#    On Windows/macOS Docker Desktop, 1000 is usually fine
+# 3. Edit .env:
+#    - MCP_SOURCE_DIR: path to the obsidian-mcp-http checkout
+#    - PUID/PGID, ports, vault path, proxy settings
+#    - MCP_API_KEY (openssl rand -hex 32)
 
-# 4. Start
-docker compose up -d
+# 4. Build the MCP image and start
+docker compose up -d --build
 
 # 5. Check
 docker compose ps
-curl http://127.0.0.1:8811/healthz
-curl http://127.0.0.1:8880/api/vault/list
+curl -i http://127.0.0.1:8811/mcp        # 401 without a token
+curl -i http://127.0.0.1:8880/api/vault/list
 ```
 
 MCP client configuration:
@@ -50,7 +52,7 @@ MCP client configuration:
       "enabled": true,
       "oauth": false,
       "headers": {
-        "X-API-Key": "{env:MCP_API_KEY}"
+        "Authorization": "Bearer {env:MCP_API_KEY}"
       }
     }
   }
@@ -71,25 +73,32 @@ export MCP_API_KEY="$(grep '^MCP_API_KEY=' .env | cut -d= -f2-)"
 opencode
 ```
 
+After changing `.env` or `opencode.json`, run `opencode reload` (or restart opencode) so the MCP client reconnects.
+
 ## MCP Authentication
 
-supergateway 4.2.1 natively supports a static API key. Compose enables it through `--apiKey`, so every MCP request must carry one of these headers:
+The HTTP transport enforces a bearer token. Compose passes `MCP_API_KEY` to the container as `OBSIDIAN_MCP_HTTP_TOKEN`, so every request must carry:
 
-- `X-API-Key: <MCP_API_KEY>`
-- `Authorization: Bearer <MCP_API_KEY>`
+```text
+Authorization: Bearer <MCP_API_KEY>
+```
 
-The `/healthz` endpoint is not protected by the API key. It is intended for container-internal checks and must not be exposed publicly.
+`X-API-Key` is **not** supported by this transport. There is no unauthenticated health endpoint; `GET /mcp` without a token returns `401`, and the container healthcheck uses the HTTP response status instead.
 
-`MCP_API_KEY` lives only in `.env` (ignored by `.gitignore`); do not commit it. To rotate the key, update `.env` and restart `obsidian-mcp`. supergateway also accepts multiple keys at once, so you can add a new key before removing the old one.
+`MCP_API_KEY` lives only in `.env` (ignored by `.gitignore`); do not commit it. Compose refuses to start when it is empty. The server supports a single token: to rotate, update `.env`, update the client, and restart `obsidian-mcp`.
 
 Verify:
 
 ```bash
-# No key: should return 401
+# No token: 401
 curl -i http://127.0.0.1:8811/mcp
 
-# With key: should no longer return 401
-curl -i -H "X-API-Key: $MCP_API_KEY" http://127.0.0.1:8811/mcp
+# With token: no longer 401
+curl -i -X POST http://127.0.0.1:8811/mcp \
+  -H "Authorization: Bearer $MCP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
 ```
 
 ## .env Variables
@@ -99,27 +108,29 @@ curl -i -H "X-API-Key: $MCP_API_KEY" http://127.0.0.1:8811/mcp
 | `PUID` / `PGID` | 1000 | Vault owner; must match between ignis and MCP |
 | `IGNIS_BIND` / `IGNIS_PORT` | 127.0.0.1 / 8880 | Web UI bind address and port |
 | `MCP_BIND` / `MCP_PORT` | 127.0.0.1 / 8811 | MCP bind address and port |
+| `MCP_ALLOWED_HOST` | 127.0.0.1 | Extra `Host` header accepted by the HTTP transport; set the LAN IP/hostname when `MCP_BIND=0.0.0.0` |
 | `VAULT_ROOT` | ./vaults | Vault root mounted into ignis |
 | `VAULT_DIR` | ./vaults/test | Single vault mounted into MCP; must be inside `VAULT_ROOT` |
 | `VAULT_ID` | notes | `vault` parameter used by MCP tools |
-| `MCP_API_KEY` | none (required) | supergateway static API key; `X-API-Key` or `Authorization: Bearer` |
+| `MCP_API_KEY` | none (required) | Bearer token for every MCP request |
+| `MCP_SOURCE_DIR` | ../obsidian-mcp-http | Build context: local checkout of `obsidian-mcp-http` |
+| `MCP_IMAGE` | obsidian-mcp-http:2.1.0 | Tag produced by `docker compose build obsidian-mcp` |
 | `DATA_DIR` | ./data | ignis application data |
 | `WATCHER_PATCH` | ./patches/server-core-watcher.js | Polling watcher patch |
-| `HTTP_PROXY` / `HTTPS_PROXY` | empty | Leave empty if no proxy is needed |
+| `HTTP_PROXY` / `HTTPS_PROXY` | empty | Leave empty if no proxy is needed; also used as build args |
 | `NO_PROXY` | localhost,... | Addresses that bypass the proxy |
 
-All paths are relative to the directory containing `docker-compose.yml`.
+All relative paths are resolved from the directory containing `docker-compose.yml`.
 
 ## Pinned Versions
 
 | Component | Pinned value |
 |---|---|
 | ignis | `nobbe/ignis@sha256:8faba277...` (Obsidian 1.14.4) |
-| Node | `node:22.23.4-bookworm-slim` |
-| supergateway | `4.2.1` |
-| obsidian-mcp | `2.0.1` |
+| Node | `node:22.23.4-bookworm-slim` (build and runtime base) |
+| obsidian-mcp-http | `2.1.0` (`MCP_IMAGE` tag, built from `MCP_SOURCE_DIR`) |
 
-obsidian-mcp source: [StevenStavrakis/obsidian-mcp](https://github.com/StevenStavrakis/obsidian-mcp/tree/v2.0.1) (MIT).
+`obsidian-mcp-http` is a fork of [StevenStavrakis/obsidian-mcp](https://github.com/StevenStavrakis/obsidian-mcp/tree/v2.0.1) (MIT) that adds the Streamable HTTP transport. The upstream stdio server plus `supergateway` wrapper are no longer used.
 
 When upgrading ignis, also check `patches/server-core-watcher.js`: it is copied from the image's `watcher.js` and adds only the three `usePolling` lines.
 
@@ -130,18 +141,22 @@ When upgrading ignis, also check `patches/server-core-watcher.js`: it is copied 
    - Then run `sudo chown -R $PUID:$PGID vaults data`.
    - Symptom: ignis reports `EACCES`, and notes written by MCP do not appear in the web UI at all.
 
-2. **A fresh npm-cache volume is not writable**
-   - Named volumes are owned by root by default, while MCP runs as `PUID`.
-   - Compose uses `npm-cache-init` to chown it once; if you remove that service, you must handle it yourself.
+2. **Build context not found**
+   - `MCP_SOURCE_DIR` must point at a checkout that contains `Dockerfile`, `package.json`, and `src/`.
+   - A relative value is resolved from this compose file's directory. Use an absolute path if the checkout lives elsewhere.
 
-3. **Hard-coded proxy**
-   - On another machine without `host.docker.internal:10808`, npx and Obsidian downloads can stall.
+3. **Host header rejected after binding to a LAN address**
+   - The transport validates the `Host` header (DNS-rebinding guard).
+   - When `MCP_BIND=0.0.0.0` and clients connect through a LAN IP or hostname, set `MCP_ALLOWED_HOST` to that value and recreate the container.
+
+4. **Hard-coded proxy**
+   - On another machine without `host.docker.internal:10808`, the image build and Obsidian downloads can stall.
    - Regenerate `.env` from `.env.example` when moving machines; do not copy the local `.env`.
 
-4. **Port or container name conflicts**
+5. **Port or container name conflicts**
    - When running multiple deployments on one host, change `IGNIS_PORT`, `MCP_PORT`, `IGNIS_CONTAINER_NAME`, and `MCP_CONTAINER_NAME`.
 
-5. **Slow first start**
+6. **Slow first start**
    - Obsidian and npm packages must be downloaded; the entrypoint also tries to install `obsidian-headless`.
    - On a slow network it may stop at `[ignis] Installing obsidian-headless...`, and the web service is not up yet.
    - You can stop this optional install first to bring the service up:
@@ -150,9 +165,13 @@ When upgrading ignis, also check `patches/server-core-watcher.js`: it is copied 
      ```
    - The trade-off is that headless sync is unavailable; you can install it later with `docker exec -u 0 ignis npm install -g --prefix /usr/local obsidian-headless`.
 
-6. **Missing `patches/server-core-watcher.js`**
+7. **Missing `patches/server-core-watcher.js`**
    - Docker creates a missing bind source as a directory, which makes mounting to a file path fail.
    - Copy the whole project directory, or point `WATCHER_PATCH` at a real file.
+
+8. **Source changes are not picked up**
+   - The image is built from `MCP_SOURCE_DIR`; rebuilding the container does not rebuild the image.
+   - Run `docker compose build obsidian-mcp && docker compose up -d obsidian-mcp` after changing the fork.
 
 ## Directory Layout
 
@@ -168,14 +187,20 @@ When upgrading ignis, also check `patches/server-core-watcher.js`: it is copied 
 │       ├── .obsidian/
 │       └── *.md
 └── data/                # ignis runtime data
+
+../obsidian-mcp-http/    # MCP source checkout (MCP_SOURCE_DIR)
+├── Dockerfile
+├── package.json
+└── src/
 ```
 
 ## Security
 
 - `ignis` and MCP bind to `127.0.0.1` by default.
-- MCP now requires `MCP_API_KEY`, but it is a static shared secret with no user identity, scopes, or audit.
+- MCP requires a bearer token, but it is a static shared secret with no user identity, scopes, or audit.
+- The native transport has no `--tools` whitelist; every configured tool is reachable with a valid token.
 - `ignis` has no built-in login or authentication; do not expose its port directly to the public internet.
-- If you set `MCP_BIND=0.0.0.0`, put it behind a TLS reverse proxy, SSH tunnel, or Tailscale, and consider using supergateway `--tools` to limit the exposed tools.
+- If you set `MCP_BIND=0.0.0.0`, put it behind a TLS reverse proxy, SSH tunnel, or Tailscale, and set `MCP_ALLOWED_HOST`.
 - Do not commit `.env` to the repository (`.gitignore` already ignores it).
 
 ## License
