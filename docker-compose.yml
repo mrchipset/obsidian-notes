@@ -1,8 +1,12 @@
 # Portable deployment: ignis (Obsidian Web) + obsidian-mcp-http (Streamable HTTP)
 #
 # Quick start:
+#   git clone https://gitee.com/mrchip233/obsidian-mcp-http.git ../obsidian-mcp-http
 #   cp .env.example .env    # then edit .env
 #   docker compose up -d --build
+#
+# The MCP source is also on GitHub (same content):
+#   https://github.com/mrchipset/obsidian-mcp-http
 #
 # All paths are relative to this compose file. See README.md for details.
 

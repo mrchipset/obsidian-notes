@@ -13,10 +13,38 @@ For the complete authentication, public-exposure, and IP-range restriction desig
 ## Prerequisites
 
 - Docker Engine / Docker Desktop with Compose v2.17 or later
-- A local checkout of `obsidian-mcp-http` containing the `Dockerfile`; point `MCP_SOURCE_DIR` at it
+- A local checkout of `obsidian-mcp-http` containing the `Dockerfile`; see [Get the source](#get-the-obsidian-mcp-http-source) and point `MCP_SOURCE_DIR` at it
 - A real vault: the directory must contain `.obsidian/`
 - Network access to the npm registry on the **first build** (the image compiles the TypeScript sources). Runtime needs no downloads.
 - If the target machine needs a proxy, set `HTTP_PROXY` / `HTTPS_PROXY` in `.env`; compose passes them to the image build
+
+## Get the obsidian-mcp-http Source
+
+The image is built from a local checkout of `obsidian-mcp-http`; no npm packages are downloaded at runtime. The repository is published in two places with identical content — pick either one:
+
+| Source | URL |
+|---|---|
+| Gitee (better for networks in mainland China) | <https://gitee.com/mrchip233/obsidian-mcp-http> |
+| GitHub | <https://github.com/mrchipset/obsidian-mcp-http> |
+
+Clone it next to this project (matching the default `MCP_SOURCE_DIR=../obsidian-mcp-http`):
+
+```bash
+# pick one
+git clone https://gitee.com/mrchip233/obsidian-mcp-http.git ../obsidian-mcp-http
+git clone https://github.com/mrchipset/obsidian-mcp-http.git ../obsidian-mcp-http
+```
+
+Any other location works too — just update `MCP_SOURCE_DIR` in `.env` (relative paths resolve from the directory containing `docker-compose.yml`).
+
+Confirm the build context is complete:
+
+```bash
+ls ../obsidian-mcp-http/Dockerfile ../obsidian-mcp-http/package.json
+ls ../obsidian-mcp-http/src
+```
+
+Without git, use "Clone/Download → Download ZIP" on the repository page and point `MCP_SOURCE_DIR` at the extracted directory. It must contain `Dockerfile`, `package.json`, and `src/` directly — no extra nesting level.
 
 ## Quick Start
 

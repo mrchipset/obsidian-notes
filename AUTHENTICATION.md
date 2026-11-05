@@ -378,5 +378,6 @@ openssl rand -hex 32
 - 仓库 README：[`README.md`](./README.md)
 - MCP 使用笔记：[`docs/mcp-usage-notes.md`](./docs/mcp-usage-notes.md)
 - obsidian-mcp-http fork：<https://github.com/mrchipset/obsidian-mcp-http>
+  - Gitee 镜像：<https://gitee.com/mrchip233/obsidian-mcp-http>
 - 上游 obsidian-mcp：<https://github.com/StevenStavrakis/obsidian-mcp>
 - MCP Streamable HTTP 规范：<https://modelcontextprotocol.io/specification>

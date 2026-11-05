@@ -13,10 +13,38 @@
 ## 前置条件
 
 - Docker Engine / Docker Desktop + Compose v2.17 以上
-- 一份包含 `Dockerfile` 的 `obsidian-mcp-http` 本地 checkout；用 `MCP_SOURCE_DIR` 指向它
+- 一份包含 `Dockerfile` 的 `obsidian-mcp-http` 本地 checkout；获取方法见[下一节](#获取-obsidian-mcp-http-源码)，用 `MCP_SOURCE_DIR` 指向它
 - 一个真实 vault：目录里必须有 `.obsidian/`
 - **首次构建**能访问 npm registry（镜像会编译 TypeScript 源码）；运行时不再下载任何 npm 包
 - 如果目标机器需要代理，在 `.env` 里配置 `HTTP_PROXY` / `HTTPS_PROXY`；compose 会把它们传给镜像构建
+
+## 获取 obsidian-mcp-http 源码
+
+镜像从 `obsidian-mcp-http` 的本地源码构建，不在运行时下载 npm 包。这个仓库有两个发布地址，内容一致，任选其一：
+
+| 源 | 地址 |
+|---|---|
+| Gitee（国内网络推荐） | <https://gitee.com/mrchip233/obsidian-mcp-http> |
+| GitHub | <https://github.com/mrchipset/obsidian-mcp-http> |
+
+克隆到本项目同级目录（与默认值 `MCP_SOURCE_DIR=../obsidian-mcp-http` 对应）：
+
+```bash
+# 任选一个执行
+git clone https://gitee.com/mrchip233/obsidian-mcp-http.git ../obsidian-mcp-http
+git clone https://github.com/mrchipset/obsidian-mcp-http.git ../obsidian-mcp-http
+```
+
+放到其他位置也可以，只要在 `.env` 里把 `MCP_SOURCE_DIR` 改成对应路径（相对路径按 `docker-compose.yml` 所在目录解析）。
+
+克隆后确认构建上下文完整：
+
+```bash
+ls ../obsidian-mcp-http/Dockerfile ../obsidian-mcp-http/package.json
+ls ../obsidian-mcp-http/src
+```
+
+不用 git 时，可以在仓库页面选择「克隆/下载 → 下载 ZIP」，解压后让 `MCP_SOURCE_DIR` 指向解压目录。目录里必须直接是 `Dockerfile`、`package.json` 和 `src/`，不要再多套一层解压出来的文件夹。
 
 ## 快速开始
 
