@@ -1,0 +1,23 @@
+[Unit]
+Description=Forward tun0 ports 8880/8811 to loopback services
+After=network-online.target openvpn-client@gitea.service
+Wants=network-online.target
+PartOf=openvpn-client@gitea.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=vpn-forward
+Group=vpn-forward
+ExecStart=/usr/bin/python3 -B /usr/local/bin/vpn-port-forward.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

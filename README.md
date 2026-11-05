@@ -129,6 +129,38 @@ curl -i -X POST http://127.0.0.1:8811/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
 ```
 
+## Access from a VPN Subnet (Optional)
+
+MCP and ignis bind to `127.0.0.1` by default. To let clients on another network (for example an OpenVPN `10.8.0.x` subnet) reach them, keep the Docker bindings unchanged and run a userspace TCP forwarder on the host that listens on the tun0 address:
+
+- `deploy/vpn-port-forward.py`: dependency-free Python asyncio forwarder
+- `deploy/vpn-port-forward.service`: systemd unit with a dedicated `vpn-forward` user, boot autostart, and lifecycle tied to `openvpn-client@gitea`
+
+Install (using `10.8.0.6` as the example address):
+
+```bash
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin vpn-forward
+sudo install -m 755 deploy/vpn-port-forward.py /usr/local/bin/vpn-port-forward.py
+sudo install -m 644 deploy/vpn-port-forward.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vpn-port-forward
+```
+
+Requirements and matching changes:
+
+- Set `LISTEN_HOST` in the script to this host's actual tun0 address.
+- Set `MCP_ALLOWED_HOST=10.8.0.6` in `.env`, otherwise MCP rejects the request with 403; recreate `obsidian-mcp` afterwards.
+- Match `openvpn-client@gitea` in the unit to your actual OpenVPN instance name.
+
+Verify:
+
+```bash
+ss -ltnp | grep -E '10.8.0.6:(8880|8811)'
+curl -i http://10.8.0.6:8811/mcp   # 401 means forwarding and Host validation both work
+```
+
+From a `10.8.0.x` client, open `http://10.8.0.6:8880` and `http://10.8.0.6:8811/mcp`. The forwarder listens only on tun0, so the public and VPC interfaces stay closed; ignis has no authentication, so every machine that can join the VPN can read and write the vault.
+
 ## .env Variables
 
 | Variable | Default | Description |
@@ -208,6 +240,9 @@ When upgrading ignis, also check `patches/server-core-watcher.js`: it is copied 
 ├── docker-compose.yml
 ├── .env.example
 ├── .env                 # local only, not committed
+├── deploy/
+│   ├── vpn-port-forward.py
+│   └── vpn-port-forward.service
 ├── patches/
 │   └── server-core-watcher.js
 ├── vaults/

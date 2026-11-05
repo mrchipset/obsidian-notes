@@ -130,6 +130,38 @@ curl -i -X POST http://127.0.0.1:8811/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
 ```
 
+## 通过 VPN 网段访问（可选）
+
+MCP 与 ignis 默认只绑 `127.0.0.1`。如果客户端在另一个网段（例如 OpenVPN 的 `10.8.0.x`），不需要改 Docker 绑定，可以在宿主机上用用户态 TCP 转发，把 tun0 地址上的 `8880` / `8811` 接到 loopback：
+
+- `deploy/vpn-port-forward.py`：纯 Python asyncio 转发器，无第三方依赖
+- `deploy/vpn-port-forward.service`：systemd 单元，专用 `vpn-forward` 用户、开机自启，并跟随 `openvpn-client@gitea` 重启
+
+安装（以 `10.8.0.6` 为例）：
+
+```bash
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin vpn-forward
+sudo install -m 755 deploy/vpn-port-forward.py /usr/local/bin/vpn-port-forward.py
+sudo install -m 644 deploy/vpn-port-forward.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vpn-port-forward
+```
+
+前提与配套修改：
+
+- 脚本里的 `LISTEN_HOST` 改成这台机器实际的 tun0 地址。
+- `.env` 设置 `MCP_ALLOWED_HOST=10.8.0.6`，否则 MCP 会因 Host 校验返回 403；改完重建 `obsidian-mcp`。
+- 单元里的 `openvpn-client@gitea` 要对应实际的 OpenVPN 实例名。
+
+验证：
+
+```bash
+ss -ltnp | grep -E '10.8.0.6:(8880|8811)'
+curl -i http://10.8.0.6:8811/mcp   # 401 说明转发与 Host 校验都通过
+```
+
+从 `10.8.0.x` 客户端访问 `http://10.8.0.6:8880` 和 `http://10.8.0.6:8811/mcp`。转发器只监听 tun0 地址，公网 / VPC 不会暴露；ignis 没有登录鉴权，能进入 VPN 网段的机器都可以读写 vault。
+
 ## .env 变量
 
 | 变量 | 默认 | 说明 |
@@ -209,6 +241,9 @@ curl -i -X POST http://127.0.0.1:8811/mcp \
 ├── docker-compose.yml
 ├── .env.example
 ├── .env                 # 本地生成，不提交
+├── deploy/
+│   ├── vpn-port-forward.py
+│   └── vpn-port-forward.service
 ├── patches/
 │   └── server-core-watcher.js
 ├── vaults/
